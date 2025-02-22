@@ -1,5 +1,5 @@
 ---
-- hosts: IBMUSER_VS01
+- hosts: vs01
   collections:
     - ibm.ibm_zos_core
   gather_facts: false
