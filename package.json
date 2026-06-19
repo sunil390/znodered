@@ -2,7 +2,10 @@
     "name": "znodered",
     "description": "A Node-RED Project",
     "version": "0.0.1",
-    "dependencies": {},
+    "dependencies": {
+        "@flowfuse/node-red-dashboard": "1.30.2",
+        "node-red-contrib-alexa-remote2-applestrudel": "5.0.59"
+    },
     "node-red": {
         "settings": {
             "flowFile": "flows.json",
