@@ -18,17 +18,15 @@ const GEOFENCE_ENTER = 2000;   // Enter zone at ≤2000mm (2m)
 const GEOFENCE_EXIT  = 2100;   // Exit zone at ≥2100mm (hysteresis band = 100mm)
 const MIN_COORDINATE = 5;      // Ignore coordinates < 5mm (noise floor)
 const STICKY_TIMEOUT = 1800000; // 30 min hold before expiring a stale target
-const PRESENCE_GRACE = 60000;  // 60s grace period before trusting "OFF" (prevents flicker)
-const SPOT_HOLD = 10000;       // 10s hold before clearing spots after target_count drops to 0
-const PRESENCE_FORCE_OFF = 300000; // 5 min of 0 targets → force presence off (overrides stuck target_detected)
+const SPOT_HOLD = 120000;      // 2 min of target_count=0 → clear spots from display
+const ALEXA_OFF = 240000;      // 4 min of target_count=0 → Alexa off
 
 let now = Date.now();
 let updated = false;
 let isNumeric = (payloadStr !== "nan" && payloadStr !== "unknown" && payloadStr !== "" && !isNaN(Number(payloadStr)));
 
 // 1. Auto-Recover Presence (only for fresh, meaningful coordinates)
-// Skip if grace period is active — target_detected said OFF, don't override with stale coords
-if (isNumeric && topic.includes("target_") && radarMap.presenceOffSince === 0) {
+if (isNumeric && topic.includes("target_")) {
     let val = Math.abs(parseFloat(msg.payload));
     if (val > MIN_COORDINATE) {
         radarMap.presence = true;
@@ -47,72 +45,59 @@ if (topic.endsWith("target_detected/state")) {
         radarMap.lastPresenceUpdate = now;
         radarMap.presenceOffSince = 0;
     } else {
-        // OFF received — start grace period (don't act immediately)
+        // OFF received — record timestamp (step 3b handles actual clearing)
         if (radarMap.presenceOffSince === 0) {
-            // First OFF: record when it started
             radarMap.presenceOffSince = now;
-        } else if (now - radarMap.presenceOffSince >= PRESENCE_GRACE) {
-            // OFF persisted for full grace period: truly gone
-            radarMap.presence = false;
-            radarMap.lastPresenceUpdate = now;
-            radarMap.presenceOffSince = 0;
-            ['t1', 't2', 't3'].forEach(t => {
-                radarMap[t].x = 0; radarMap[t].y = 0; radarMap[t].active = false; 
-                radarMap[t].inZone = false; radarMap[t].distance = 0;
-                radarMap[t].lastUpdate = 0; radarMap[t].lastAxis = null;
-            });
-            updated = true;
         }
-        // else: still within grace period, do nothing yet
     }
 }
 
-// 3a. Target Count — manage spot clearing and presence force-off
+// 3a. Target Count — primary departure detection
 if (topic.endsWith("target_count/state")) {
     let count = parseInt(msg.payload);
     if (count > 0 && !isNaN(count)) {
-        // Targets active — someone is here, cancel all pending timers and unblock
+        // Real target — reset departure timer (only target_detected=ON resets presenceOffSince)
         radarMap.targetCountZeroSince = 0;
-        radarMap.presenceOffSince = 0;
     } else {
-        // target_count is 0 — start or check hold timer
+        // target_count = 0 — start departure timer
         if (radarMap.targetCountZeroSince === 0) {
             radarMap.targetCountZeroSince = now;
-        } else {
-            let zeroElapsed = now - radarMap.targetCountZeroSince;
-            
-            // Clear spots when: target_detected is OFF + 10s of 0 count
-            // (sitting still keeps spots because target_detected stays ON)
-            if (zeroElapsed >= SPOT_HOLD && radarMap.presenceOffSince > 0) {
-                ['t1', 't2', 't3'].forEach(k => {
-                    if (radarMap[k].active) {
-                        radarMap[k].x = 0; radarMap[k].y = 0; radarMap[k].active = false;
-                        radarMap[k].inZone = false; radarMap[k].distance = 0;
-                        radarMap[k].lastUpdate = 0; radarMap[k].lastAxis = null;
-                        updated = true;
-                    }
-                });
-            }
-            
-            // Force everything off after 2 min of 0 targets (overrides stuck target_detected)
-            if (zeroElapsed >= PRESENCE_FORCE_OFF) {
-                ['t1', 't2', 't3'].forEach(k => {
-                    radarMap[k].x = 0; radarMap[k].y = 0; radarMap[k].active = false;
-                    radarMap[k].inZone = false; radarMap[k].distance = 0;
-                    radarMap[k].lastUpdate = 0; radarMap[k].lastAxis = null;
-                });
-                radarMap.presence = false;
-                radarMap.lastPresenceUpdate = now;
-                // Keep presenceOffSince non-zero to block step 1 from re-enabling with stale data
-                radarMap.presenceOffSince = now;
-                updated = true;
-            }
         }
     }
 }
 
-// 3b. Coordinate Tracking (only when presence confirmed, not during grace period)
-if (isNumeric && radarMap.presence && radarMap.presenceOffSince === 0) {
+// 3b. Departure actions — based on target_count=0 duration
+// Doppler radar can't see stationary targets, so count=0 during stillness gaps.
+// Use long timeouts so micro-movements (every 30-90s) reset the timer.
+if (radarMap.targetCountZeroSince > 0) {
+    let zeroElapsed = now - radarMap.targetCountZeroSince;
+    
+    // 2 min of no targets: clear spots from display
+    if (zeroElapsed >= SPOT_HOLD) {
+        ['t1', 't2', 't3'].forEach(k => {
+            radarMap[k].x = 0; radarMap[k].y = 0; radarMap[k].active = false;
+            radarMap[k].inZone = false; radarMap[k].distance = 0;
+            radarMap[k].lastUpdate = 0; radarMap[k].lastAxis = null;
+        });
+        updated = true;
+    }
+    
+    // 5 min of no targets: presence off → Alexa off
+    if (zeroElapsed >= ALEXA_OFF) {
+        radarMap.presence = false;
+        radarMap.lastPresenceUpdate = now;
+        radarMap.presenceOffSince = now; // block auto-recover until real return
+        ['t1', 't2', 't3'].forEach(k => {
+            radarMap[k].x = 0; radarMap[k].y = 0; radarMap[k].active = false;
+            radarMap[k].inZone = false; radarMap[k].distance = 0;
+            radarMap[k].lastUpdate = 0; radarMap[k].lastAxis = null;
+        });
+        updated = true;
+    }
+}
+
+// 3c. Coordinate Tracking
+if (isNumeric && radarMap.presence) {
     let val = parseFloat(msg.payload);
     if (Math.abs(val) > MIN_COORDINATE) {
         const assignCoord = (t, axis) => {
