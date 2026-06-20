@@ -38,16 +38,29 @@
 │                        │ msg.reset = true  │    ┌──────────────────┐         │
 │                        │ ─────────────────▶│───▶│ Alexa: Plug OFF │         │
 │                        └───────────────────┘    │ (routine call)   │         │
-│                                                 └──────────────────┘         │
+│                                                 └────────┬─────────┘         │
+│                                                          │                   │
+│  ┌ ─ ─ ─ ─ ─ ─ NOTIFICATIONS (chained after Alexa) ─ ─ ─│─ ─ ─ ─ ─ ─ ─ ┐  │
+│                                                          │                  │
+│  │  Plug ON ──▶ ┌──────────┐ ──▶ ┌──────────────────┐    │               │  │
+│                 │ "Arrived"│     │ ntfy: Arrival    │    │                  │
+│  │              │ (change) │     │ POST zpi-Presence│    │               │  │
+│                 └──────────┘     └──────────────────┘    │                  │
+│  │                                                       │               │  │
+│               Plug OFF ──▶ ┌──────────┐ ──▶ ┌───────────▼──────────┐     │  │
+│  │                         │ "Left"   │     │ ntfy: Departure      │        │
+│                            │ (change) │     │ POST zpi-Presence    │     │  │
+│  │                         └──────────┘     └──────────────────────┘        │
+│  └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘  │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
-         ▲                                              │
-         │ MQTT                                         │ HTTPS (Alexa API)
-         │                                              ▼
-┌────────┴─────────┐                         ┌──────────────────┐
-│ RD-03D Radar     │                         │ Amazon Alexa     │
-│ (mmWave sensor)  │                         │ Smart Plug       │
-│ via ESPHome      │                         └──────────────────┘
+         ▲                                    │                  │
+         │ MQTT                               │ HTTPS (Alexa)    │ HTTPS (ntfy)
+         │                                    ▼                  ▼
+┌────────┴─────────┐                ┌──────────────────┐  ┌─────────────┐
+│ RD-03D Radar     │                │ Amazon Alexa     │  │ ntfy.sh     │
+│ (mmWave sensor)  │                │ Smart Plug       │  │ Mobile Push │
+│ via ESPHome      │                └──────────────────┘  └─────────────┘
 └──────────────────┘
 ```
 
@@ -100,6 +113,18 @@
 - The sweep animation is purely cosmetic (rotating line) — no server data needed for it
 - Target positions are interpolated client-side for smooth movement between server updates
 - Canvas is self-contained — no external dependencies
+
+### DD-08: Chained notifications after Alexa routines
+
+**Decision**: The ntfy notification nodes are wired in series after the Alexa routine nodes (Plug ON → Arrived → ntfy, Plug OFF → Left → ntfy), not in parallel from the Route Commands switch.
+
+**Rationale**: Ensures the notification only fires if the Alexa routine call completes. If Alexa fails, you still get notified (the http request node runs regardless of upstream errors), but the causal chain is clear: plug action → notification. This also avoids adding more outputs to the switch node.
+
+### DD-09: Both notifications use Priority High
+
+**Decision**: Both arrival and departure ntfy notifications use `Priority: High`.
+
+**Rationale**: Presence events are infrequent (a few per day) and actionable. High priority ensures they cut through phone Do Not Disturb / silent modes on both Android and iOS.
 
 ## State Machine
 
@@ -161,6 +186,10 @@ home/radar/sensor/
 | `1b8af07c0798800c` | alexa-remote-routine | Plug Off (Departure) | Trigger Alexa OFF routine |
 | `cancel_off_timer` | change | Cancel OFF Timer | Set msg.reset for trigger |
 | `3ff8616701896538` | trigger | Wait 10s for Departure | Debounce before OFF |
+| `4619beb21109b99a` | change | Arrived | Set payload for arrival notification |
+| `61d0568a16f037c4` | http request | Notify Arrival | POST to ntfy.sh on arrival |
+| `0e365b1bf5f245dd` | change | Left | Set payload for departure notification |
+| `7ae4ed7c51d7819a` | http request | Notify Departure | POST to ntfy.sh on departure |
 
 ## Dashboard Layout
 
