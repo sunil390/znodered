@@ -20,6 +20,7 @@ RD-03D mmWave radar detects room presence and controls a smart plug via Alexa ro
 - Tracks up to 3 targets via MQTT (`home/radar/sensor/+/state`)
 - 2-meter geofence triggers plug on/off with 10-second departure debounce
 - 30-minute sticky timeout prevents false departures when stationary
+- Mobile push notifications via [ntfy.sh](https://ntfy.sh) on arrival/departure
 - Live retro radar sweep visualization on `/radar` dashboard page
 
 ## Dashboard
@@ -39,6 +40,12 @@ Theme: **znext** (orange surface, blue primary)
 |---------|---------|---------|
 | `@flowfuse/node-red-dashboard` | 1.30.2 | Dashboard 2.0 UI |
 | `node-red-contrib-alexa-remote2-applestrudel` | 5.0.59 | Alexa routine control |
+
+## Services
+
+| Service | Purpose |
+|---------|--------|
+| ntfy.sh | Mobile push notifications (`zpi-Presence` topic) |
 
 ## Hardware
 

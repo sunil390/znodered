@@ -36,7 +36,17 @@ A Node-RED flow that uses an RD-03D mmWave radar sensor (via MQTT) to detect hum
 - **Cancellation**: If someone returns during the 10-second window, the OFF timer is cancelled via `msg.reset = true`
 - Uses `alexa-remote-routine` nodes with specific routine ARNs and device IDs
 
-### CAP-PA-05: Live Radar Visualization
+### CAP-PA-05: Mobile Push Notifications via ntfy
+
+- Sends push notifications to mobile devices on arrival and departure events
+- Uses [ntfy.sh](https://ntfy.sh) service via HTTP POST to topic `zpi-Presence`
+- **Arrival**: Notification fires immediately after Alexa plug ON routine completes
+- **Departure**: Notification fires after the 10-second debounce (post Alexa plug OFF)
+- Both notifications use Priority: High, Title: "Presence", Tags: "House"
+- Arrival body: `Arrived — plug ON`
+- Departure body: `departed — plug Off`
+
+### CAP-PA-06: Live Radar Visualization
 
 - Renders a retro-styled radar sweep on dashboard page `/radar`
 - Half-circle (180°) sweep with animated rotation
@@ -70,6 +80,7 @@ A Node-RED flow that uses an RD-03D mmWave radar sensor (via MQTT) to detect hum
 | Alexa Plug OFF routine | Cloud routine | ARN `amzn1.alexa.automation.d75ddab9-...` |
 | Node-RED Dashboard 2.0 | npm package | `@flowfuse/node-red-dashboard` |
 | `node-red-contrib-alexa-remote2` | npm package | Alexa integration |
+| ntfy.sh | Cloud service | `https://ntfy.sh/zpi-Presence` (push notifications) |
 
 ## State Model
 
