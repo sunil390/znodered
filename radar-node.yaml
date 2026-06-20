@@ -1,0 +1,86 @@
+esphome:
+  name: radar-node
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# --- WI-FI SETTINGS ---
+wifi:
+  ssid: "AX55"
+  password: "xxxxxxxxx"
+
+  # SoftAP fallback hotspot if your home Wi-Fi disconnects
+  ap:
+    ssid: "Radar-Node-Fallback"
+    password: "xxxxxxx"
+
+captive_portal:
+
+logger:
+
+# --- HARDWARE SERIAL CONFIGURATION ---
+# Handles the high-speed 256k raw radar stream on D0/D1 pins
+uart:
+  - id: radar_uart
+    tx_pin: GPIO44  # This is the physical D1 pad on the board
+    rx_pin: GPIO43  # This is the physical D0 pad on the board
+    baud_rate: 256000
+    parity: NONE
+    stop_bits: 1
+
+# Activates the built-in RD-03D library components
+rd03d:
+  id: rd03d_radar
+  uart_id: radar_uart
+  tracking_mode: multi
+
+# --- SENSOR INGESTION & COUPLING ---
+binary_sensor:
+  - platform: rd03d
+    rd03d_id: rd03d_radar
+    target:
+      name: "Target Detected"
+    target_1:
+      name: "Target 1 Presence"
+    target_2:
+      name: "Target 2 Presence"
+    target_3:
+      name: "Target 3 Presence"
+
+# --- SENSORS ---
+sensor:
+  - platform: rd03d
+    rd03d_id: rd03d_radar
+    target_count:
+      name: "Target Count"
+    # --- Target 1 ---
+    target_1:
+      x:
+        name: "Target 1 X"
+      y:
+        name: "Target 1 Y"
+      speed:
+        name: "Target 1 Speed"
+    # --- Target 2 ---
+    target_2:
+      x:
+        name: "Target 2 X"
+      y:
+        name: "Target 2 Y"
+      speed:
+        name: "Target 2 Speed"
+    # --- Target 3 ---
+    target_3:
+      x:
+        name: "Target 3 X"
+      y:
+        name: "Target 3 Y"
+      speed:
+        name: "Target 3 Speed"
+
+# Streams the coordinates seamlessly over the network back to Node-RED 5
+mqtt:
+  broker: 192.168.2.251  # Points directly back to your Pi's local broker profile
+  topic_prefix: home/radar
