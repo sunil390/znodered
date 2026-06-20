@@ -768,7 +768,7 @@
                 "t": "set",
                 "p": "payload",
                 "pt": "msg",
-                "to": "Arrived \u00e2\u20ac\u201d plug ON",
+                "to": "Office Occupied",
                 "tot": "str"
             }
         ],
@@ -795,7 +795,7 @@
                 "t": "set",
                 "p": "payload",
                 "pt": "msg",
-                "to": "departed \u00e2\u20ac\u201d plug Off",
+                "to": "Office Vacant",
                 "tot": "str"
             }
         ],
