@@ -9,10 +9,9 @@
 │  ┌────────────┐     ┌───────────────────────────────────┐                    │
 │  │ MQTT In    │────▶│ Track Targets (Function Node)     │                    │
 │  │ home/radar/│     │                                   │                    │
-│  │ sensor/+/  │     │ • Parse topic → target + axis     │                    │
-│  │ state      │     │ • Presence state machine          │                    │
-│  └────────────┘     │ • Grace period (60s OFF delay)    │                    │
-│                     │ • Target count force-off (5 min)   │                    │
+│  │ +/+/state  │     │ • Parse topic → target + axis     │                    │
+│  └────────────┘     │ • Presence state machine          │                    │
+│                     │ • Departure: 2 min spot / 4 min   │                    │
 │                     │ • Geofence with hysteresis         │                    │
 │                     │ • Emit visualization (out 1)       │                    │
 │                     │ • Emit Alexa on/off (out 2)        │                    │
@@ -55,17 +54,17 @@
 
 **Rationale**: The radar canvas needs frequent updates to render smooth blip movement. The Alexa command should only fire on transitions. Separating outputs avoids downstream filtering.
 
-### DD-03: 60-second grace period instead of instant OFF
+### DD-03: Timeout-based departure (no grace period)
 
-**Decision**: When `target_detected` goes OFF, wait 60 seconds before trusting it.
+**Decision**: Departure is driven solely by `target_count = 0` duration — 2 minutes for spot clearing, 4 minutes for Alexa off. No separate grace period on `target_detected`.
 
-**Rationale**: The RD-03D's FMCW detection drops out frequently during stationary periods (no Doppler return). A 60s grace period prevents false departures. If `target_detected` returns ON during the grace window, it's cancelled immediately.
+**Rationale**: The RD-03D's `target_detected` signal mirrors `target_count` exactly (both go OFF within 0.5s of each other). It provides no independent "stationary presence" detection. A grace period on `target_detected` OFF added no value and caused false departures during normal stillness gaps. Long timeouts on `target_count = 0` work because micro-movements (fidgeting, typing, breathing) produce count > 0 spikes every 5-90 seconds, resetting the timer.
 
-### DD-04: Target count force-off (5 minutes)
+### DD-04: Two-stage departure (2 min spots / 4 min Alexa)
 
-**Decision**: After 5 continuous minutes of `target_count = 0`, force presence off regardless of `target_detected`.
+**Decision**: After 2 minutes of continuous `target_count = 0`, clear display spots. After 4 minutes, turn off Alexa.
 
-**Rationale**: Handles the case where `target_detected` gets stuck ON (sensor bug or firmware issue). 5 minutes is long enough that any real person would produce at least one micro-movement resetting the timer. After force-off, `presenceOffSince` stays non-zero to block stale coordinates from re-enabling presence — only `target_count > 0` can unblock.
+**Rationale**: The 2-minute spot clearing is fast enough to feel responsive after leaving (~2:10 total including ghost spikes) while being long enough that normal desk stillness (micro-movements every 5-90s) keeps the timer reset. The 4-minute Alexa threshold adds an extra 2 minutes of safety for the lights — if the spot clearing was a false positive (deep reading), the person has time to move before lights go off.
 
 ### DD-05: Geofence hysteresis (100mm band)
 
@@ -73,11 +72,11 @@
 
 **Rationale**: Without hysteresis, a person standing at exactly 2m causes rapid in/out toggling as coordinates jitter ±50mm. The 100mm dead band eliminates this.
 
-### DD-06: Auto-recover gated on presenceOffSince
+### DD-06: Auto-recover not gated on presenceOffSince
 
-**Decision**: Auto-recovery from coordinates only fires when `presenceOffSince === 0`.
+**Decision**: Auto-recovery from coordinates fires whenever valid numeric data > 5mm arrives, regardless of `presenceOffSince` state.
 
-**Rationale**: If `target_detected` has said OFF (or force-off has fired), stale coordinates still arriving should NOT override that decision. Only `target_count > 0` (proof of real movement) can unblock.
+**Rationale**: Since `target_detected` mirrors `target_count` (both toggle together), gating coordinate tracking on `presenceOffSince === 0` blocked position updates during normal sitting-still periods when `target_detected` briefly went OFF. This caused jerky spot movement. The long departure timeouts (2-4 min) provide sufficient protection against stale coordinates re-enabling presence after true departure.
 
 ### DD-07: Client-side lerp for smooth visualization
 
@@ -98,60 +97,69 @@
 
 ```
                          target_detected ON
-                         or target_count > 0
+                         or coords > 5mm
                     ┌────────────────────────────┐
                     │                            │
                     ▼                            │
 ┌─────────────┐  coords > 5mm  ┌─────────────┐ │
 │  IDLE       │────────────────▶│  PRESENT    │ │
-│  (all reset)│  (if unblocked) │  (tracking) │ │
+│  (all reset)│                 │  (tracking) │ │
 └──────┬──────┘                 └──────┬──────┘ │
        ▲                               │        │
-       │                               │target_detected OFF
+       │                               │target_count = 0
        │                               ▼        │
        │                        ┌─────────────┐ │
-       │  grace period          │  GRACE      │ │
-       │  expires (60s)         │  (60s wait) │─┘
-       │                        └──────┬──────┘
-       │                               │
-       │                               │ 60s elapsed
-       │                               ▼
-       │                        ┌─────────────┐
-       ├────────────────────────│  DEPARTED   │
-       │                        │  (wipe all) │
-       │                        └─────────────┘
-       │
-       │  target_count=0 for 5 min
-       │                        ┌─────────────┐
-       └────────────────────────│  FORCE OFF  │
-                                │  (blocked)  │
-                                └─────────────┘
+       │  count > 0 resets       │  COUNTING  │─┘
+       │  timer                 │  (waiting) │
+       │                        └────┬──┬─────┘
+       │                             │  │
+       │                     2 min   │  │ 4 min
+       │                             ▼  │
+       │                  ┌──────────┐  │
+       │                  │SPOT_HOLD│  │
+       │                  │(clear   │  │
+       │                  │ spots)  │  │
+       │                  └──────────┘  │
+       │                             ▼
+       │                  ┌──────────┐
+       └──────────────────│ALEXA_OFF│
+                          │(presence│
+                          │ false)  │
+                          └──────────┘
 ```
 
 ## MQTT Topic Structure
 
 ```
-home/radar/sensor/
-├── target_detected/state       → "on" | "off" (composite presence binary)
-├── target_count/state          → integer (0-3, number of moving targets)
-├── target_1_x/state            → float (mm, lateral displacement)
-├── target_1_y/state            → float (mm, depth from radar)
-├── target_1_presence/state     → "on" | "off" (per-target, not used by function)
-├── target_2_x/state            → float (mm)
-├── target_2_y/state            → float (mm)
-├── target_2_presence/state     → "on" | "off"
-├── target_3_x/state            → float (mm)
-├── target_3_y/state            → float (mm)
-└── target_3_presence/state     → "on" | "off"
+home/radar/
+├── sensor/
+│   ├── target_count/state          → integer (0-3, number of moving targets)
+│   ├── target_1_x/state            → float (mm, lateral displacement)
+│   ├── target_1_y/state            → float (mm, depth from radar)
+│   ├── target_1_speed/state        → float (speed, not used by function)
+│   ├── target_2_x/state            → float (mm)
+│   ├── target_2_y/state            → float (mm)
+│   ├── target_2_speed/state        → float
+│   ├── target_3_x/state            → float (mm)
+│   ├── target_3_y/state            → float (mm)
+│   └── target_3_speed/state        → float
+└── binary_sensor/
+    ├── target_detected/state       → "on" | "off" (mirrors target_count > 0)
+    ├── target_1_presence/state     → "on" | "off" (per-target, not used)
+    ├── target_2_presence/state     → "on" | "off"
+    └── target_3_presence/state     → "on" | "off"
 ```
+
+> MQTT subscription uses `home/radar/+/+/state` to match both `sensor/` and `binary_sensor/` paths in a single subscription.
 
 ## Processing Pipeline
 
 ```
-Step 1: Auto-Recover — set presence=true from valid coords (gated on presenceOffSince===0)
-Step 2: target_detected handling — ON=immediate trust, OFF=start grace timer
-Step 3a: target_count — count>0 unblocks all; count=0 starts spot-hold + force-off timers
-Step 3b: Coordinate tracking — store raw x/y per target (only if presence=true + unblocked)
+Step 1: Auto-Recover — set presence=true from valid coords > 5mm
+Step 2: target_detected handling — ON=set presence true, OFF=record timestamp
+Step 3a: target_count — count>0 resets departure timer; count=0 starts timer
+Step 3b: Departure actions — 2 min: clear spots; 4 min: Alexa off
+Step 3c: Coordinate tracking — store raw x/y per target (if presence=true)
 Step 4: Geofence evaluation — calculate distance, apply enter/exit hysteresis
 Step 5: Output routing — emit radarMap if updated; emit "on"/"off" if occupied changed
 ```
