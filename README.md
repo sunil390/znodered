@@ -15,13 +15,16 @@ Send scrolling text to a BBC Micro:bit over Bluetooth — from the dashboard UI 
 
 ### Presence Automation
 
-RD-03D mmWave radar detects room presence and controls a smart plug via Alexa routines.
+RD-03D mmWave radar detects room presence and controls a smart plug via Alexa.
 
+- ESP32-S3 DevKitC-1 + RD-03D radar via ESPHome (UART 256000 baud, MQTT to `192.168.2.251`)
 - Tracks up to 3 targets via MQTT (`home/radar/sensor/+/state`)
-- 2-meter geofence triggers plug on/off with 10-second departure debounce
-- 30-minute sticky timeout prevents false departures when stationary
+- 2-meter geofence with 100mm hysteresis band (enter ≤2000mm, exit ≥2100mm)
+- 60-second grace period before trusting target_detected OFF (prevents false departures)
+- 5-minute force-off after continuous `target_count = 0` (overrides stuck sensors)
+- 30-minute sticky timeout for stationary presence
 - Mobile push notifications via [ntfy.sh](https://ntfy.sh) on arrival/departure
-- Live retro radar sweep visualization on `/radar` dashboard page
+- Live 120° retro radar sweep visualization on `/radar` dashboard page
 
 ## Dashboard
 
@@ -51,7 +54,8 @@ Theme: **znext** (orange surface, blue primary)
 
 - Raspberry Pi (runtime host)
 - BBC Micro:bit (BLE paired for text display)
-- RD-03D mmWave radar (presence sensor via MQTT)
+- ESP32-S3 DevKitC-1 (UART bridge to radar, WiFi to MQTT)
+- RD-03D mmWave radar (Ai-Thinker 24GHz FMCW, 120° FOV, 5V power, 3.3V UART)
 - Alexa-controlled smart plug
 
 ## Specs

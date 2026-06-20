@@ -10,57 +10,32 @@
 │  │ MQTT In    │────▶│ Track Targets (Function Node)     │                    │
 │  │ home/radar/│     │                                   │                    │
 │  │ sensor/+/  │     │ • Parse topic → target + axis     │                    │
-│  │ state      │     │ • Update flow.radarMap            │                    │
-│  └────────────┘     │ • Calculate distance              │                    │
-│                     │ • Evaluate geofence               │                    │
-│                     │ • Determine presence state         │                    │
-│                     │ • Emit visualization data (out 1)  │                    │
-│                     │ • Emit commands (out 2)            │                    │
+│  │ state      │     │ • Presence state machine          │                    │
+│  └────────────┘     │ • Grace period (60s OFF delay)    │                    │
+│                     │ • Target count force-off (5 min)   │                    │
+│                     │ • Geofence with hysteresis         │                    │
+│                     │ • Emit visualization (out 1)       │                    │
+│                     │ • Emit Alexa on/off (out 2)        │                    │
 │                     └──────────┬──────────┬─────────────┘                    │
 │                        Out 1   │          │  Out 2                           │
 │                                │          │                                  │
 │                 ┌──────────────▼──┐   ┌───▼───────────────┐                  │
-│                 │ Radar Sweep     │   │ Route Commands    │                  │
-│                 │ (ui-template)   │   │ (switch node)     │                  │
-│                 │ Canvas + Vue.js │   │ "on" → output 1   │                  │
-│                 │ /radar page     │   │ "off" → output 2  │                  │
-│                 └─────────────────┘   └───┬──────────┬────┘                  │
-│                                           │          │                       │
-│                                    "on"   │          │  "off"                │
-│                                           │          │                       │
-│                        ┌──────────────────▼┐    ┌────▼─────────────────┐     │
-│                        │ Alexa: Plug ON    │    │ Trigger: Wait 10s   │     │
-│                        │ (routine call)    │    │ (departure debounce) │     │
-│                        └──────────────────┬┘    └────┬─────────────────┘     │
-│                                           │          │                       │
-│                        ┌──────────────────▼┐         │                       │
-│                        │ Cancel OFF Timer  │         ▼                       │
-│                        │ msg.reset = true  │    ┌──────────────────┐         │
-│                        │ ─────────────────▶│───▶│ Alexa: Plug OFF │         │
-│                        └───────────────────┘    │ (routine call)   │         │
-│                                                 └────────┬─────────┘         │
-│                                                          │                   │
-│  ┌ ─ ─ ─ ─ ─ ─ NOTIFICATIONS (chained after Alexa) ─ ─ ─│─ ─ ─ ─ ─ ─ ─ ┐  │
-│                                                          │                  │
-│  │  Plug ON ──▶ ┌──────────┐ ──▶ ┌──────────────────┐    │               │  │
-│                 │ "Arrived"│     │ ntfy: Arrival    │    │                  │
-│  │              │ (change) │     │ POST zpi-Presence│    │               │  │
-│                 └──────────┘     └──────────────────┘    │                  │
-│  │                                                       │               │  │
-│               Plug OFF ──▶ ┌──────────┐ ──▶ ┌───────────▼──────────┐     │  │
-│  │                         │ "Left"   │     │ ntfy: Departure      │        │
-│                            │ (change) │     │ POST zpi-Presence    │     │  │
-│  │                         └──────────┘     └──────────────────────┘        │
-│  └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘  │
+│                 │ Radar Sweep     │   │ Alexa Control     │                  │
+│                 │ (ui-template)   │   │ on → plug ON      │                  │
+│                 │ Canvas + Vue.js │   │ off → plug OFF    │                  │
+│                 │ 120° FOV        │   │                   │                  │
+│                 │ Lerp smoothing  │   │                   │                  │
+│                 │ /radar page     │   │                   │                  │
+│                 └─────────────────┘   └───────────────────┘                  │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
-         ▲                                    │                  │
-         │ MQTT                               │ HTTPS (Alexa)    │ HTTPS (ntfy)
-         │                                    ▼                  ▼
-┌────────┴─────────┐                ┌──────────────────┐  ┌─────────────┐
-│ RD-03D Radar     │                │ Amazon Alexa     │  │ ntfy.sh     │
-│ (mmWave sensor)  │                │ Smart Plug       │  │ Mobile Push │
-│ via ESPHome      │                └──────────────────┘  └─────────────┘
+         ▲                                    │
+         │ MQTT                               │ HTTPS (Alexa)
+         │                                    ▼
+┌────────┴─────────┐                ┌──────────────────┐
+│ ESP32-S3         │                │ Amazon Alexa     │
+│ + RD-03D Radar   │                │ Smart Plug       │
+│ (ESPHome MQTT)   │                └──────────────────┘
 └──────────────────┘
 ```
 
@@ -72,124 +47,114 @@
 
 **Rationale**: The logic is tightly coupled — presence depends on coordinates, geofence depends on distance, and the output decision depends on all of these. Splitting into multiple nodes would require complex state synchronization via context. A single function node with `flow.get("radarMap")` keeps it atomic.
 
-**Tradeoff**: The function is ~100 lines and harder to unit test. Acceptable for a home automation use case.
+**Tradeoff**: The function is ~200 lines. Acceptable for home automation — the complexity is inherent to the radar's bursty behavior.
 
-### DD-02: Two outputs from the function node
+### DD-02: Two outputs — visualization + Alexa
 
-**Decision**: Output 1 = visualization data (always emitted on updates). Output 2 = command signals ("on"/"off", only emitted on state transitions).
+**Decision**: Output 1 = radarMap payload (emitted on every coordinate update). Output 2 = "on"/"off" string (only on `occupied` state transitions).
 
-**Rationale**: Separates concerns downstream. The radar canvas needs every coordinate update to render smoothly. The Alexa commands should only fire on transitions (entering/leaving zone), not on every data point.
+**Rationale**: The radar canvas needs frequent updates to render smooth blip movement. The Alexa command should only fire on transitions. Separating outputs avoids downstream filtering.
 
-### DD-03: 10-second departure debounce with cancellation
+### DD-03: 60-second grace period instead of instant OFF
 
-**Decision**: Use a `trigger` node with 10s delay before sending "off". The "on" path also sends `msg.reset = true` to cancel any pending off timer.
+**Decision**: When `target_detected` goes OFF, wait 60 seconds before trusting it.
 
-**Rationale**: mmWave radar can briefly lose tracking (target turns, occlusion). A hard 10s debounce prevents light flickering. The cancellation ensures that if the person returns within 10s, the plug stays on seamlessly.
+**Rationale**: The RD-03D's FMCW detection drops out frequently during stationary periods (no Doppler return). A 60s grace period prevents false departures. If `target_detected` returns ON during the grace window, it's cancelled immediately.
 
-### DD-04: 30-minute sticky timeout
+### DD-04: Target count force-off (5 minutes)
 
-**Decision**: Once a target is marked `inZone`, it stays active for 30 minutes even without new coordinate updates.
+**Decision**: After 5 continuous minutes of `target_count = 0`, force presence off regardless of `target_detected`.
 
-**Rationale**: When a person sits perfectly still (reading, sleeping), the radar may stop reporting coordinate updates. The sticky timeout prevents false "departure" triggers during stationary periods. 30 minutes is conservative — most movement-free periods are shorter.
+**Rationale**: Handles the case where `target_detected` gets stuck ON (sensor bug or firmware issue). 5 minutes is long enough that any real person would produce at least one micro-movement resetting the timer. After force-off, `presenceOffSince` stays non-zero to block stale coordinates from re-enabling presence — only `target_count > 0` can unblock.
 
-### DD-05: Instant wipe on explicit presence=false
+### DD-05: Geofence hysteresis (100mm band)
 
-**Decision**: When the radar's presence binary sensor explicitly reports `off/false`, all target state is immediately zeroed out.
+**Decision**: Enter zone at ≤2000mm, exit zone at ≥2100mm.
 
-**Rationale**: The RD-03D's built-in presence algorithm is authoritative. If it says "no one is here," trust it over the sticky timeout. This handles edge cases where the radar legitimately confirms the room is empty.
+**Rationale**: Without hysteresis, a person standing at exactly 2m causes rapid in/out toggling as coordinates jitter ±50mm. The 100mm dead band eliminates this.
 
-### DD-06: Auto-recover presence from coordinate data
+### DD-06: Auto-recover gated on presenceOffSince
 
-**Decision**: If any valid coordinate data arrives while `presence=false`, automatically set `presence=true`.
+**Decision**: Auto-recovery from coordinates only fires when `presenceOffSince === 0`.
 
-**Rationale**: Race condition protection. The radar sometimes sends target coordinates before (or without) an explicit presence state change. If we're getting coordinates, someone is obviously there.
+**Rationale**: If `target_detected` has said OFF (or force-off has fired), stale coordinates still arriving should NOT override that decision. Only `target_count > 0` (proof of real movement) can unblock.
 
-### DD-07: Client-side rendering for radar visualization
+### DD-07: Client-side lerp for smooth visualization
 
-**Decision**: The radar sweep is rendered entirely client-side using a Vue.js `<canvas>` component in a `ui-template` node.
+**Decision**: Function node passes raw coordinates. All visual smoothing happens in the Vue canvas component via lerp interpolation at 60fps.
 
 **Rationale**: 
-- Server-side rendering at 60fps would overload the Pi's CPU
-- The sweep animation is purely cosmetic (rotating line) — no server data needed for it
-- Target positions are interpolated client-side for smooth movement between server updates
-- Canvas is self-contained — no external dependencies
+- Server-side EMA + client-side lerp causes double-smoothing artifacts (wobbly chasing)
+- The radar's bursty pattern (data → nan gap → data) means smoothing at the data layer hides position information
+- Client-side lerp at `baseEase=0.06` provides a ~500ms glide between readings, masking the 0.3-2s data gaps
 
-### DD-08: Chained notifications after Alexa routines
+### DD-08: 120° arc visualization matching hardware FOV
 
-**Decision**: The ntfy notification nodes are wired in series after the Alexa routine nodes (Plug ON → Arrived → ntfy, Plug OFF → Left → ntfy), not in parallel from the Route Commands switch.
+**Decision**: Radar display shows a 120° cone (±60° from center) instead of a full 180° semicircle.
 
-**Rationale**: Ensures the notification only fires if the Alexa routine call completes. If Alexa fails, you still get notified (the http request node runs regardless of upstream errors), but the causal chain is clear: plug action → notification. This also avoids adding more outputs to the switch node.
-
-### DD-09: Both notifications use Priority High
-
-**Decision**: Both arrival and departure ntfy notifications use `Priority: High`.
-
-**Rationale**: Presence events are infrequent (a few per day) and actionable. High priority ensures they cut through phone Do Not Disturb / silent modes on both Android and iOS.
+**Rationale**: The RD-03D's actual scanning field is 120°. Showing 180° would display dead space where targets can never appear, making the visualization misleading.
 
 ## State Machine
 
 ```
-                    ┌─────────────────────────────┐
-                    │                             │
-                    ▼                             │
-┌─────────────┐  coordinates   ┌──────────────┐  │
-│  NO_PRESENCE │──────────────▶│  TRACKING    │  │
-│  (all reset) │               │  (updating)  │  │
-└──────┬───────┘               └──────┬───────┘  │
-       ▲                              │          │
-       │                              │ distance │
-       │  presence=false              │ < 2000mm │
-       │  (instant wipe)              ▼          │
-       │                       ┌──────────────┐  │
-       ├───────────────────────│  IN_ZONE     │  │
-       │                       │  (cmd = "on")│  │
-       │                       └──────┬───────┘  │
-       │                              │          │
-       │                              │ distance │
-       │                              │ > 2000mm │
-       │                              │ + 30min  │
-       │                              │ timeout  │
-       │                              ▼          │
-       │                       ┌──────────────┐  │
-       └───────────────────────│  DEPARTING   │──┘
-                               │  (cmd = "off")│
-                               │  10s debounce │
-                               └──────────────┘
+                         target_detected ON
+                         or target_count > 0
+                    ┌────────────────────────────┐
+                    │                            │
+                    ▼                            │
+┌─────────────┐  coords > 5mm  ┌─────────────┐ │
+│  IDLE       │────────────────▶│  PRESENT    │ │
+│  (all reset)│  (if unblocked) │  (tracking) │ │
+└──────┬──────┘                 └──────┬──────┘ │
+       ▲                               │        │
+       │                               │target_detected OFF
+       │                               ▼        │
+       │                        ┌─────────────┐ │
+       │  grace period          │  GRACE      │ │
+       │  expires (60s)         │  (60s wait) │─┘
+       │                        └──────┬──────┘
+       │                               │
+       │                               │ 60s elapsed
+       │                               ▼
+       │                        ┌─────────────┐
+       ├────────────────────────│  DEPARTED   │
+       │                        │  (wipe all) │
+       │                        └─────────────┘
+       │
+       │  target_count=0 for 5 min
+       │                        ┌─────────────┐
+       └────────────────────────│  FORCE OFF  │
+                                │  (blocked)  │
+                                └─────────────┘
 ```
 
 ## MQTT Topic Structure
 
 ```
 home/radar/sensor/
-├── presence/state           → "on" | "off"
-├── target_detected/state    → "on" | "off"
-├── target_1/
-│   ├── x/state             → float (mm)
-│   └── y/state             → float (mm)
-├── target_2/
-│   ├── x/state             → float (mm)
-│   └── y/state             → float (mm)
-└── target_3/
-    ├── x/state             → float (mm)
-    └── y/state             → float (mm)
+├── target_detected/state       → "on" | "off" (composite presence binary)
+├── target_count/state          → integer (0-3, number of moving targets)
+├── target_1_x/state            → float (mm, lateral displacement)
+├── target_1_y/state            → float (mm, depth from radar)
+├── target_1_presence/state     → "on" | "off" (per-target, not used by function)
+├── target_2_x/state            → float (mm)
+├── target_2_y/state            → float (mm)
+├── target_2_presence/state     → "on" | "off"
+├── target_3_x/state            → float (mm)
+├── target_3_y/state            → float (mm)
+└── target_3_presence/state     → "on" | "off"
 ```
 
-## Node Inventory
+## Processing Pipeline
 
-| Node ID | Type | Name | Purpose |
-|---------|------|------|---------|
-| `355d91b376838afd` | mqtt in | Radar Ingest | Subscribe to all radar topics |
-| `f6fa7c91edf99328` | function | Track Targets (Auto-Recover) | Core state machine |
-| `4548557c61c0631b` | ui-template | Live Radar Sweep | Canvas visualization |
-| `route_alexa_commands` | switch | Route Commands | Split on/off paths |
-| `0a7170b8fa33ca8a` | alexa-remote-routine | Plug On (Arrival) | Trigger Alexa ON routine |
-| `1b8af07c0798800c` | alexa-remote-routine | Plug Off (Departure) | Trigger Alexa OFF routine |
-| `cancel_off_timer` | change | Cancel OFF Timer | Set msg.reset for trigger |
-| `3ff8616701896538` | trigger | Wait 10s for Departure | Debounce before OFF |
-| `4619beb21109b99a` | change | Arrived | Set payload for arrival notification |
-| `61d0568a16f037c4` | http request | Notify Arrival | POST to ntfy.sh on arrival |
-| `0e365b1bf5f245dd` | change | Left | Set payload for departure notification |
-| `7ae4ed7c51d7819a` | http request | Notify Departure | POST to ntfy.sh on departure |
+```
+Step 1: Auto-Recover — set presence=true from valid coords (gated on presenceOffSince===0)
+Step 2: target_detected handling — ON=immediate trust, OFF=start grace timer
+Step 3a: target_count — count>0 unblocks all; count=0 starts spot-hold + force-off timers
+Step 3b: Coordinate tracking — store raw x/y per target (only if presence=true + unblocked)
+Step 4: Geofence evaluation — calculate distance, apply enter/exit hysteresis
+Step 5: Output routing — emit radarMap if updated; emit "on"/"off" if occupied changed
+```
 
 ## Dashboard Layout
 
@@ -200,7 +165,7 @@ zDash (/dashboard)
 │
 └── Page: Radar (/radar)           ← This flow
     └── Group: RD-03D Radar (6×9)
-        └── Live Radar Sweep (canvas, full group)
+        └── Live Radar Sweep (canvas, full group, 120° FOV)
 
 Theme: "znext"
   surface: #d4651c (orange)
