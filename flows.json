@@ -66,67 +66,6 @@
         "groupType": "default"
     },
     {
-        "id": "214af749a352f0b9",
-        "type": "ui-page",
-        "name": "zNext",
-        "ui": "db2_ui_base",
-        "path": "/zNext2",
-        "icon": "home",
-        "layout": "grid",
-        "theme": "7d5839f1c1a60810",
-        "breakpoints": [
-            {
-                "name": "Default",
-                "px": "0",
-                "cols": "3"
-            },
-            {
-                "name": "Tablet",
-                "px": "576",
-                "cols": "6"
-            },
-            {
-                "name": "Small Desktop",
-                "px": "768",
-                "cols": "9"
-            },
-            {
-                "name": "Desktop",
-                "px": "1024",
-                "cols": "12"
-            }
-        ],
-        "order": 2,
-        "className": "",
-        "visible": "true",
-        "disabled": "false"
-    },
-    {
-        "id": "dbb870924e8c72b9",
-        "type": "ui-group",
-        "name": "zNext Group",
-        "page": "214af749a352f0b9",
-        "width": 6,
-        "height": 1,
-        "order": 1,
-        "showTitle": true,
-        "className": "",
-        "visible": "true",
-        "disabled": "false",
-        "groupType": "default"
-    },
-    {
-        "id": "205d18d1cca0a5ec",
-        "type": "ui-spacer",
-        "group": "dbb870924e8c72b9",
-        "name": "spacer1",
-        "tooltip": "",
-        "order": 2,
-        "width": 1,
-        "height": 1,
-        "className": ""
-    },
-    {
         "id": "2632d7878d7f7655",
         "type": "alexa-remote-account",
         "name": "Alexa Profile",
@@ -179,7 +118,7 @@
     {
         "id": "2ac811281ef859fc",
         "type": "ui-group",
-        "name": "RD-03D",
+        "name": "RD-03D Radar",
         "page": "98b112437bd850bc",
         "width": "6",
         "height": "9",
@@ -221,7 +160,7 @@
                 "cols": "12"
             }
         ],
-        "order": 3,
+        "order": 2,
         "className": "",
         "visible": "true",
         "disabled": "false"
@@ -593,7 +532,7 @@
             }
         },
         "x": 720,
-        "y": 380,
+        "y": 440,
         "wires": [
             []
         ]
@@ -617,8 +556,8 @@
                 }
             }
         },
-        "x": 1020,
-        "y": 600,
+        "x": 940,
+        "y": 720,
         "wires": [
             []
         ]
@@ -721,8 +660,8 @@
         "bytopic": "all",
         "topic": "topic",
         "outputs": 1,
-        "x": 720,
-        "y": 740,
+        "x": 600,
+        "y": 720,
         "wires": [
             [
                 "1b8af07c0798800c"
@@ -763,13 +702,13 @@
         "order": 1,
         "width": "6",
         "height": "9",
-        "format": "<template>\n    <div style=\"display: flex; flex-direction: column; align-items: center; background: #000500; padding: 15px; border-radius: 8px; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; border: 2px solid #003300;\">\n        <h3 style=\"color: #33ff33; font-family: 'Courier New', Courier, monospace; margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 8px #00ff00;\">TACTICAL RADAR LINK</h3>\n        <div style=\"flex: 1; display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 100%; overflow: hidden;\">\n            <canvas ref=\"radarCanvas\" width=\"600\" height=\"450\" style=\"background: #000a00; border-radius: 4px; max-width: 100%; max-height: 100%; aspect-ratio: 4/3; box-shadow: inset 0 0 60px rgba(0, 50, 0, 0.8);\"></canvas>\n        </div>\n    </div>\n</template>\n\n<script>\nexport default {\n    name: 'RadarSweepCanvas',\n    props: ['id', 'props', 'state'],\n    data() {\n        return {\n            sweepAngle: -Math.PI,\n            targetDest: {\n                t1: {x:0, y:0, active: false},\n                t2: {x:0, y:0, active: false},\n                t3: {x:0, y:0, active: false}\n            },\n            targetDisplay: {\n                t1: {x:0, y:0, active: false, initialized: false},\n                t2: {x:0, y:0, active: false, initialized: false},\n                t3: {x:0, y:0, active: false, initialized: false}\n            },\n            maxRange: 6.0, \n            animationFrameId: null,\n            lastTime: 0\n        }\n    },\n    mounted() {\n        const canvas = this.$refs.radarCanvas;\n        if (!canvas) return;\n        \n        const ctx = canvas.getContext('2d');\n        const cx = canvas.width / 2;\n        const cy = canvas.height - 15; \n        const scale = (canvas.height - 40) / this.maxRange;\n\n        this.$socket.on('msg-input:' + this.id, (msg) => {\n            if (msg && msg.payload && typeof msg.payload === 'object') {\n                ['t1', 't2', 't3'].forEach(t => {\n                    if (msg.payload[t]) {\n                        this.targetDest[t].x = (msg.payload[t].x || 0) / 1000;\n                        this.targetDest[t].y = (msg.payload[t].y || 0) / 1000;\n                        this.targetDest[t].active = msg.payload[t].active || false;\n                        \n                        if (!this.targetDisplay[t].initialized && this.targetDest[t].active) {\n                            this.targetDisplay[t].x = this.targetDest[t].x;\n                            this.targetDisplay[t].y = this.targetDest[t].y;\n                            this.targetDisplay[t].initialized = true;\n                        }\n                        this.targetDisplay[t].active = this.targetDest[t].active;\n                    }\n                });\n            }\n        });\n\n        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;\n        this.lastTime = performance.now();\n\n        const drawRadar = (timestamp) => {\n            let dt = (timestamp - this.lastTime) / 16.666; \n            if (isNaN(dt) || dt > 10) dt = 1;\n            this.lastTime = timestamp;\n\n            // 1. The Phosphor Fade Effect (Lower opacity means longer trails)\n            ctx.globalCompositeOperation = 'source-over';\n            ctx.fillStyle = 'rgba(0, 10, 0, 0.08)'; \n            ctx.fillRect(0, 0, canvas.width, canvas.height);\n\n            // Reset Shadows for grid\n            ctx.shadowBlur = 0;\n\n            // 2. Legacy Grid Rings (Every 1m)\n            ctx.strokeStyle = 'rgba(0, 255, 0, 0.15)';\n            ctx.lineWidth = 1;\n            ctx.font = '10px Courier New';\n            ctx.textBaseline = 'bottom';\n            ctx.textAlign = 'center';\n\n            for (let r = 1; r <= this.maxRange; r += 1) {\n                ctx.beginPath();\n                ctx.arc(cx, cy, r * scale, Math.PI, 2 * Math.PI);\n                ctx.stroke();\n                \n                ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';\n                ctx.fillText(r + 'm', cx + 2, cy - (r * scale) + 12);\n            }\n\n            // 3. Legacy Cross Rays (30 degree increments)\n            const angles = [Math.PI * 7/6, Math.PI * 4/3, Math.PI * 3/2, Math.PI * 5/3, Math.PI * 11/6];\n            angles.forEach(a => {\n                ctx.beginPath();\n                ctx.moveTo(cx, cy);\n                ctx.lineTo(cx + Math.cos(a) * (this.maxRange * scale), cy + Math.sin(a) * (this.maxRange * scale));\n                ctx.stroke();\n            });\n\n            // 4. The Sweeper Arm (Bright with glow)\n            this.sweepAngle += 0.015 * dt;\n            if (this.sweepAngle > 0) this.sweepAngle = -Math.PI;\n            \n            ctx.shadowBlur = 15;\n            ctx.shadowColor = '#00ff00';\n            ctx.strokeStyle = '#33ff33';\n            ctx.lineWidth = 3;\n            ctx.beginPath();\n            ctx.moveTo(cx, cy);\n            ctx.lineTo(cx + Math.cos(this.sweepAngle) * (this.maxRange * scale), cy + Math.sin(this.sweepAngle) * (this.maxRange * scale));\n            ctx.stroke();\n\n            // Smooth Target Movement\n            const baseEase = 0.05;\n            const currentEase = Math.min(1, baseEase * dt);\n\n            ['t1', 't2', 't3'].forEach(t => {\n                if (this.targetDisplay[t].active) {\n                    this.targetDisplay[t].x = lerp(this.targetDisplay[t].x, this.targetDest[t].x, currentEase);\n                    this.targetDisplay[t].y = lerp(this.targetDisplay[t].y, this.targetDest[t].y, currentEase);\n                } else {\n                    this.targetDisplay[t].initialized = false;\n                }\n            });\n\n            // Draw Targets\n            this.drawBlip(ctx, cx, cy, scale, this.targetDisplay.t1, 'T1');\n            this.drawBlip(ctx, cx, cy, scale, this.targetDisplay.t2, 'T2');\n            this.drawBlip(ctx, cx, cy, scale, this.targetDisplay.t3, 'T3');\n\n            this.animationFrameId = requestAnimationFrame(drawRadar);\n        };\n\n        this.animationFrameId = requestAnimationFrame(drawRadar);\n    },\n    beforeUnmount() {\n        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);\n    },\n    methods: {\n        drawBlip(ctx, cx, cy, scale, target, label) {\n            if (target && target.active && (target.x !== 0 || target.y !== 0)) {\n                let pixelX = Math.round(cx + (target.x * scale));\n                let pixelY = Math.round(cy - (target.y * scale));\n\n                if (pixelX >= 0 && pixelX <= 600 && pixelY >= 0 && pixelY <= 450) {\n                    // Glowing core\n                    ctx.shadowBlur = 10;\n                    ctx.shadowColor = '#33ff33';\n                    ctx.fillStyle = '#ccffcc';\n                    ctx.beginPath();\n                    ctx.arc(pixelX, pixelY, 4, 0, 2 * Math.PI);\n                    ctx.fill();\n\n                    // Outer Ping Ring\n                    ctx.shadowBlur = 0;\n                    ctx.strokeStyle = '#00ff00';\n                    ctx.lineWidth = 1.5;\n                    ctx.beginPath();\n                    ctx.arc(pixelX, pixelY, 12, 0, 2 * Math.PI);\n                    ctx.stroke();\n\n                    // Target Label\n                    ctx.fillStyle = '#00ff00';\n                    ctx.font = 'bold 12px Courier New';\n                    ctx.fillText(label, pixelX + 16, pixelY - 2);\n                }\n            }\n        }\n    }\n}\n</script>",
+        "format": "<template>\n    <div style=\"display: flex; flex-direction: column; align-items: center; background: #000500; padding: 15px; border-radius: 8px; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; border: 2px solid #003300;\">\n        <h3 style=\"color: #33ff33; font-family: 'Courier New', Courier, monospace; margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 8px #00ff00;\">TACTICAL RADAR LINK</h3>\n        <div style=\"flex: 1; display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 100%; overflow: hidden;\">\n            <canvas ref=\"radarCanvas\" width=\"800\" height=\"400\" style=\"background: #000a00; border-radius: 4px; width: 100%; max-height: 100%; object-fit: contain; aspect-ratio: 2/1; box-shadow: inset 0 0 60px rgba(0, 50, 0, 0.8);\"></canvas>\n        </div>\n    </div>\n</template>\n\n<script>\nexport default {\n    name: 'RadarSweepCanvas',\n    props: ['id', 'props', 'state'],\n    data() {\n        return {\n            sweepAngle: -Math.PI,\n            targetDest: {\n                t1: {x:0, y:0, active: false},\n                t2: {x:0, y:0, active: false},\n                t3: {x:0, y:0, active: false}\n            },\n            targetDisplay: {\n                t1: {x:0, y:0, active: false, initialized: false},\n                t2: {x:0, y:0, active: false, initialized: false},\n                t3: {x:0, y:0, active: false, initialized: false}\n            },\n            maxRange: 6.0, \n            animationFrameId: null,\n            lastTime: 0\n        }\n    },\n    mounted() {\n        const canvas = this.$refs.radarCanvas;\n        if (!canvas) return;\n        \n        const ctx = canvas.getContext('2d');\n        const padding = 20; \n        const cx = canvas.width / 2;\n        const cy = canvas.height - 10; \n        \n        // Dynamic scale ensures the radius fits perfectly within canvas bounds\n        const maxRadius = Math.min(canvas.width / 2 - padding, canvas.height - padding);\n        const scale = maxRadius / this.maxRange;\n\n        // Ensure socket listener exists before binding (mocked/safeguarded for portability)\n        if (this.$socket) {\n            this.$socket.on('msg-input:' + this.id, (msg) => {\n                if (msg && msg.payload && typeof msg.payload === 'object') {\n                    ['t1', 't2', 't3'].forEach(t => {\n                        if (msg.payload[t]) {\n                            this.targetDest[t].x = (msg.payload[t].x || 0) / 1000;\n                            this.targetDest[t].y = (msg.payload[t].y || 0) / 1000;\n                            this.targetDest[t].active = msg.payload[t].active || false;\n                            \n                            if (!this.targetDisplay[t].initialized && this.targetDest[t].active) {\n                                this.targetDisplay[t].x = this.targetDest[t].x;\n                                this.targetDisplay[t].y = this.targetDest[t].y;\n                                this.targetDisplay[t].initialized = true;\n                            }\n                            this.targetDisplay[t].active = this.targetDest[t].active;\n                        }\n                    });\n                }\n            });\n        }\n\n        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;\n        this.lastTime = performance.now();\n\n        const drawRadar = (timestamp) => {\n            let dt = (timestamp - this.lastTime) / 16.666; \n            if (isNaN(dt) || dt > 10) dt = 1;\n            this.lastTime = timestamp;\n\n            // 1. The Phosphor Fade Effect\n            ctx.globalCompositeOperation = 'source-over';\n            ctx.fillStyle = 'rgba(0, 10, 0, 0.08)'; \n            ctx.fillRect(0, 0, canvas.width, canvas.height);\n\n            // Reset Shadows for grid\n            ctx.shadowBlur = 0;\n\n            // 2. Grid Rings (Every 1m)\n            ctx.strokeStyle = 'rgba(0, 255, 0, 0.15)';\n            ctx.lineWidth = 1;\n            ctx.font = '10px Courier New';\n            ctx.textBaseline = 'bottom';\n            ctx.textAlign = 'center';\n\n            for (let r = 1; r <= this.maxRange; r += 1) {\n                ctx.beginPath();\n                ctx.arc(cx, cy, r * scale, Math.PI, 2 * Math.PI);\n                ctx.stroke();\n                \n                ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';\n                ctx.fillText(r + 'm', cx + 2, cy - (r * scale) + 12);\n            }\n\n            // 3. Cross Rays (30 degree increments)\n            const angles = [Math.PI * 7/6, Math.PI * 4/3, Math.PI * 3/2, Math.PI * 5/3, Math.PI * 11/6];\n            angles.forEach(a => {\n                ctx.beginPath();\n                ctx.moveTo(cx, cy);\n                ctx.lineTo(cx + Math.cos(a) * (this.maxRange * scale), cy + Math.sin(a) * (this.maxRange * scale));\n                ctx.stroke();\n            });\n\n            // 4. The Sweeper Arm\n            this.sweepAngle += 0.015 * dt;\n            if (this.sweepAngle > 0) this.sweepAngle = -Math.PI;\n            \n            ctx.shadowBlur = 15;\n            ctx.shadowColor = '#00ff00';\n            ctx.strokeStyle = '#33ff33';\n            ctx.lineWidth = 3;\n            ctx.beginPath();\n            ctx.moveTo(cx, cy);\n            ctx.lineTo(cx + Math.cos(this.sweepAngle) * (this.maxRange * scale), cy + Math.sin(this.sweepAngle) * (this.maxRange * scale));\n            ctx.stroke();\n\n            // Smooth Target Movement\n            const baseEase = 0.05;\n            const currentEase = Math.min(1, baseEase * dt);\n\n            ['t1', 't2', 't3'].forEach(t => {\n                if (this.targetDisplay[t].active) {\n                    this.targetDisplay[t].x = lerp(this.targetDisplay[t].x, this.targetDest[t].x, currentEase);\n                    this.targetDisplay[t].y = lerp(this.targetDisplay[t].y, this.targetDest[t].y, currentEase);\n                } else {\n                    this.targetDisplay[t].initialized = false;\n                }\n            });\n\n            // Draw Targets\n            this.drawBlip(ctx, cx, cy, scale, this.targetDisplay.t1, 'T1');\n            this.drawBlip(ctx, cx, cy, scale, this.targetDisplay.t2, 'T2');\n            this.drawBlip(ctx, cx, cy, scale, this.targetDisplay.t3, 'T3');\n\n            this.animationFrameId = requestAnimationFrame(drawRadar);\n        };\n\n        this.animationFrameId = requestAnimationFrame(drawRadar);\n    },\n    beforeUnmount() {\n        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);\n    },\n    methods: {\n        drawBlip(ctx, cx, cy, scale, target, label) {\n            if (target && target.active && (target.x !== 0 || target.y !== 0)) {\n                let pixelX = Math.round(cx + (target.x * scale));\n                let pixelY = Math.round(cy - (target.y * scale));\n\n                // Dynamically check against canvas dimensions rather than hardcoded 600/450\n                if (pixelX >= 0 && pixelX <= ctx.canvas.width && pixelY >= 0 && pixelY <= ctx.canvas.height) {\n                    // Glowing core\n                    ctx.shadowBlur = 10;\n                    ctx.shadowColor = '#33ff33';\n                    ctx.fillStyle = '#ccffcc';\n                    ctx.beginPath();\n                    ctx.arc(pixelX, pixelY, 4, 0, 2 * Math.PI);\n                    ctx.fill();\n\n                    // Outer Ping Ring\n                    ctx.shadowBlur = 0;\n                    ctx.strokeStyle = '#00ff00';\n                    ctx.lineWidth = 1.5;\n                    ctx.beginPath();\n                    ctx.arc(pixelX, pixelY, 12, 0, 2 * Math.PI);\n                    ctx.stroke();\n\n                    // Target Label\n                    ctx.fillStyle = '#00ff00';\n                    ctx.font = 'bold 12px Courier New';\n                    ctx.fillText(label, pixelX + 16, pixelY - 2);\n                }\n            }\n        }\n    }\n}\n</script>",
         "storeOutMessages": true,
         "passthru": true,
         "templateScope": "local",
         "className": "",
-        "x": 780,
-        "y": 300,
+        "x": 760,
+        "y": 340,
         "wires": [
             []
         ]
