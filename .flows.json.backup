@@ -16,56 +16,6 @@
         "env": []
     },
     {
-        "id": "db2_page_1",
-        "type": "ui-page",
-        "name": "Micro:bit",
-        "ui": "db2_ui_base",
-        "path": "/dashboard",
-        "icon": "home",
-        "layout": "grid",
-        "theme": "7d5839f1c1a60810",
-        "breakpoints": [
-            {
-                "name": "Default",
-                "px": "0",
-                "cols": "3"
-            },
-            {
-                "name": "Tablet",
-                "px": "576",
-                "cols": "6"
-            },
-            {
-                "name": "Small Desktop",
-                "px": "768",
-                "cols": "9"
-            },
-            {
-                "name": "Desktop",
-                "px": "1024",
-                "cols": "12"
-            }
-        ],
-        "order": 1,
-        "className": "",
-        "visible": "true",
-        "disabled": "false"
-    },
-    {
-        "id": "db2_group_1",
-        "type": "ui-group",
-        "name": "Micro:bit Messaging Control",
-        "page": "db2_page_1",
-        "width": "6",
-        "height": "2",
-        "order": 1,
-        "showTitle": true,
-        "className": "",
-        "visible": "true",
-        "disabled": "false",
-        "groupType": "default"
-    },
-    {
         "id": "2632d7878d7f7655",
         "type": "alexa-remote-account",
         "name": "Alexa Profile",
@@ -116,12 +66,87 @@
         "sessionExpiry": ""
     },
     {
-        "id": "2ac811281ef859fc",
+        "id": "db2_ui_base",
+        "type": "ui-base",
+        "name": "zDash",
+        "path": "/dashboard",
+        "appIcon": "",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "headerContent": "page",
+        "navigationStyle": "default",
+        "titleBarStyle": "default",
+        "showReconnectNotification": true,
+        "notificationDisplayTime": 5,
+        "showDisconnectNotification": true,
+        "allowInstall": true
+    },
+    {
+        "id": "7d5839f1c1a60810",
+        "type": "ui-theme",
+        "name": "znext",
+        "colors": {
+            "surface": "#d4651c",
+            "primary": "#0094ce",
+            "bgPage": "#eeeeee",
+            "groupBg": "#ffffff",
+            "groupOutline": "#cccccc"
+        },
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "db2_page_1",
+        "type": "ui-page",
+        "name": "Micro:bit",
+        "ui": "db2_ui_base",
+        "path": "/dashboard",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "7d5839f1c1a60810",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": "0",
+                "cols": "3"
+            },
+            {
+                "name": "Tablet",
+                "px": "576",
+                "cols": "6"
+            },
+            {
+                "name": "Small Desktop",
+                "px": "768",
+                "cols": "9"
+            },
+            {
+                "name": "Desktop",
+                "px": "1024",
+                "cols": "12"
+            }
+        ],
+        "order": 1,
+        "className": "",
+        "visible": "true",
+        "disabled": "false"
+    },
+    {
+        "id": "db2_group_1",
         "type": "ui-group",
-        "name": "RD-03D Radar",
-        "page": "98b112437bd850bc",
+        "name": "Micro:bit Messaging Control",
+        "page": "db2_page_1",
         "width": "6",
-        "height": "9",
+        "height": "2",
         "order": 1,
         "showTitle": true,
         "className": "",
@@ -166,43 +191,18 @@
         "disabled": "false"
     },
     {
-        "id": "db2_ui_base",
-        "type": "ui-base",
-        "name": "zDash",
-        "path": "/dashboard",
-        "appIcon": "",
-        "includeClientData": true,
-        "acceptsClientConfig": [
-            "ui-notification",
-            "ui-control"
-        ],
-        "showPathInSidebar": false,
-        "headerContent": "page",
-        "navigationStyle": "default",
-        "titleBarStyle": "default",
-        "showReconnectNotification": true,
-        "notificationDisplayTime": 5,
-        "showDisconnectNotification": true,
-        "allowInstall": true
-    },
-    {
-        "id": "7d5839f1c1a60810",
-        "type": "ui-theme",
-        "name": "znext",
-        "colors": {
-            "surface": "#d4651c",
-            "primary": "#0094ce",
-            "bgPage": "#eeeeee",
-            "groupBg": "#ffffff",
-            "groupOutline": "#cccccc"
-        },
-        "sizes": {
-            "density": "default",
-            "pagePadding": "12px",
-            "groupGap": "12px",
-            "groupBorderRadius": "4px",
-            "widgetGap": "12px"
-        }
+        "id": "2ac811281ef859fc",
+        "type": "ui-group",
+        "name": "RD-03D Radar",
+        "page": "98b112437bd850bc",
+        "width": "6",
+        "height": "9",
+        "order": 1,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
     },
     {
         "id": "db2_text_input",
@@ -534,7 +534,9 @@
         "x": 720,
         "y": 440,
         "wires": [
-            []
+            [
+                "4619beb21109b99a"
+            ]
         ]
     },
     {
@@ -556,10 +558,12 @@
                 }
             }
         },
-        "x": 1020,
-        "y": 600,
+        "x": 820,
+        "y": 740,
         "wires": [
-            []
+            [
+                "0e365b1bf5f245dd"
+            ]
         ]
     },
     {
@@ -635,8 +639,8 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 710,
-        "y": 540,
+        "x": 630,
+        "y": 600,
         "wires": [
             [
                 "3ff8616701896538"
@@ -660,7 +664,7 @@
         "bytopic": "all",
         "topic": "topic",
         "outputs": 1,
-        "x": 720,
+        "x": 520,
         "y": 740,
         "wires": [
             [
@@ -709,6 +713,142 @@
         "className": "",
         "x": 760,
         "y": 340,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "61d0568a16f037c4",
+        "type": "http request",
+        "z": "26e4e309610a0579",
+        "name": "Notify Arrival",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "https://ntfy.sh/zpi-Presence",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "other",
+                "keyValue": "Title",
+                "valueType": "other",
+                "valueValue": "Presence"
+            },
+            {
+                "keyType": "other",
+                "keyValue": "Priority",
+                "valueType": "other",
+                "valueValue": "Low"
+            },
+            {
+                "keyType": "other",
+                "keyValue": "Tags",
+                "valueType": "other",
+                "valueValue": "House"
+            }
+        ],
+        "x": 1170,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "4619beb21109b99a",
+        "type": "change",
+        "z": "26e4e309610a0579",
+        "name": "Arrived",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "Arrived — plug ON",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 940,
+        "y": 440,
+        "wires": [
+            [
+                "61d0568a16f037c4"
+            ]
+        ]
+    },
+    {
+        "id": "0e365b1bf5f245dd",
+        "type": "change",
+        "z": "26e4e309610a0579",
+        "name": "Left",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "departed — plug Off",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1030,
+        "y": 740,
+        "wires": [
+            [
+                "7ae4ed7c51d7819a"
+            ]
+        ]
+    },
+    {
+        "id": "7ae4ed7c51d7819a",
+        "type": "http request",
+        "z": "26e4e309610a0579",
+        "name": "Notify Departure",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "https://ntfy.sh/zpi-Presence",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "other",
+                "keyValue": "Title",
+                "valueType": "other",
+                "valueValue": "Presence"
+            },
+            {
+                "keyType": "other",
+                "keyValue": "Priority",
+                "valueType": "other",
+                "valueValue": "Low"
+            },
+            {
+                "keyType": "other",
+                "keyValue": "Tags",
+                "valueType": "other",
+                "valueValue": "House"
+            }
+        ],
+        "x": 1220,
+        "y": 740,
         "wires": [
             []
         ]
