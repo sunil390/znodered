@@ -68,3 +68,29 @@ Detailed specifications and design documents live in [`openspec/specs/`](openspe
 - [`microbit-messaging/design.md`](openspec/specs/microbit-messaging/design.md) — architecture, design decisions, data flow
 - [`presence-automation/spec.md`](openspec/specs/presence-automation/spec.md) — capabilities, state model, constraints
 - [`presence-automation/design.md`](openspec/specs/presence-automation/design.md) — architecture, state machine, MQTT topics
+
+## Lessons Learned — RD-03D Radar
+
+### Power supply matters more than code
+
+Switching the ESP32 mini from a shared USB port to a **dedicated powerbank** resolved two major issues:
+1. **Multi-target detection became reliable** — clean 5V DC eliminates switching noise that was degrading the 24GHz FMCW signal-to-noise ratio. The radar couldn't discriminate multiple return signals through the noise floor.
+2. **Spot movements became smooth** — less phase noise on the chirps produces more stable x/y coordinates, reducing jitter that even client-side lerp couldn't fully mask.
+
+> **Tip**: Enable "low-power-draw mode" on the powerbank (long-press the button). The ESP32 idles at ~40-80mA which is below most powerbanks' auto-shutoff threshold (~100-200mA). Without this mode, the powerbank will cut power after 10-30s thinking nothing is connected.
+
+### Doppler radar can't see stationary targets
+
+The RD-03D relies on Doppler shift — a person sitting perfectly still produces no coordinate updates AND `target_count` drops to 0. This means:
+- You cannot use `target_count` or coordinate freshness alone to determine if someone left
+- Departure must be timeout-based (4 min of sustained `target_count=0`) because micro-movements (breathing, fidgeting) produce spikes every 5-90s that reset the timer
+
+### Target IDs are unstable
+
+When a second person enters or leaves, the radar frequently **swaps target IDs** (t1 becomes t2 and vice versa). Naively clearing "excess" targets by slot number (e.g., "count=1 so clear t2") kills the real person's tracking data after a swap.
+
+**Solution**: Only expire a stale slot when another slot is actively receiving fresh coordinates (proving it's a swap, not stillness). Expire the stalest slot first.
+
+### Geofence-only triggering prevents false activations
+
+Using `presence` alone to control the smart plug caused false power-ons when walking past the room (detected at >2m). Requiring a target within the 2m geofence ensures power-on only when someone enters the working area.
