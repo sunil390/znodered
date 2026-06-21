@@ -20,9 +20,11 @@ RD-03D mmWave radar detects room presence and controls a smart plug via Alexa.
 - ESP32-S3 DevKitC-1 + RD-03D radar via ESPHome (UART 256000 baud, MQTT to `192.168.2.251`)
 - Tracks up to 3 targets via MQTT (`home/radar/+/+/state` — covers `sensor/` and `binary_sensor/`)
 - 2-meter geofence with 100mm hysteresis band (enter ≤2000mm, exit ≥2100mm)
+- **Geofence-only power control** — Alexa powers on only when a target enters the 2m perimeter
+- ID-swap resilient: 10s staleness expiry with excess-slot guard (handles radar target reassignment)
+- Stillness-safe: stale targets preserved when all slots are quiet (Doppler can't see stationary targets)
 - 2-minute spot hold before clearing display (micro-movements reset timer)
 - 4-minute timeout before Alexa off (extra safety margin for lights)
-- 30-minute sticky timeout for stationary presence
 - Mobile push notifications via [ntfy.sh](https://ntfy.sh) on arrival/departure
 - Live 120° retro radar sweep visualization on `/radar` dashboard page
 

@@ -93,6 +93,21 @@
 
 **Rationale**: The RD-03D's actual scanning field is 120°. Showing 180° would display dead space where targets can never appear, making the visualization misleading.
 
+### DD-09: Staleness-based target expiry with ID-swap resilience
+
+**Decision**: Individual targets expire after 10s without a coordinate update, BUT only when the radar reports fewer active targets than we're currently tracking (excess slots > 0). If all tracked slots are stale simultaneously, they are preserved.
+
+**Rationale**: The RD-03D can swap target IDs when targets enter or leave the scene — what was t1 becomes t2 and vice versa. A naive "clear t2 when count < 2" approach kills the real person's data after a swap. The staleness + excess-slot logic handles both scenarios:
+- **Stillness** (person sitting, no motion): All slots go stale, `target_count` drops to 0, but `freshSlots = 0` → `excessSlots = 0` → nothing expires. The person's last known geofence state is preserved.
+- **ID swap** (person B leaves, radar reassigns IDs): The real person gets fresh coordinates under their new ID within ~1s. Old slot is stale AND `freshSlots > 0` → `excessSlots > 0` → stalest slot expires.
+- Targets are evaluated stalest-first so the correct ghost gets expired during swaps.
+
+### DD-10: Geofence-only power control
+
+**Decision**: `occupied` (which drives Alexa on/off) is based solely on `anyActive` (target within 2m geofence), not on presence alone.
+
+**Rationale**: The user wants power on only when someone is physically within the 2m working perimeter. Presence at >2m (e.g., walking past the room) should not trigger power-on. The geofence with hysteresis provides a clean boundary.
+
 ## State Machine
 
 ```
@@ -158,10 +173,13 @@ home/radar/
 Step 1: Auto-Recover — set presence=true from valid coords > 5mm
 Step 2: target_detected handling — ON=set presence true, OFF=record timestamp
 Step 3a: target_count — count>0 resets departure timer; count=0 starts timer
+         Also stores lastTargetCount for excess-slot detection
 Step 3b: Departure actions — 2 min: clear spots; 4 min: Alexa off
 Step 3c: Coordinate tracking — store raw x/y per target (if presence=true)
-Step 4: Geofence evaluation — calculate distance, apply enter/exit hysteresis
+Step 4: Geofence evaluation — staleness check (10s) with excess-slot guard,
+         then distance calc + enter/exit hysteresis. Stalest evaluated first.
 Step 5: Output routing — emit radarMap if updated; emit "on"/"off" if occupied changed
+         occupied = anyActive (geofence only, not presence alone)
 ```
 
 ## Dashboard Layout

@@ -22,8 +22,8 @@ A Node-RED flow that uses an RD-03D mmWave radar sensor (via ESP32-S3 + ESPHome 
 - **Explicit ON**: `target_detected` = ON sets presence true and resets `presenceOffSince` timestamp
 - **Explicit OFF**: `target_detected` = OFF records a timestamp (no immediate action — departure handled by target_count duration in step 3b)
 - **Target count reset**: `target_count > 0` resets departure timer (`targetCountZeroSince = 0`)
+- **Target count stored**: `lastTargetCount` recorded for excess-slot detection in geofence evaluation
 - **Departure via timeout**: After 4 continuous minutes of `target_count = 0`, presence is set to false and Alexa turns off
-- **Sticky timeout**: Targets hold position for 30 minutes without new data if presence is still confirmed
 
 > **Note**: The RD-03D is Doppler-only — `target_detected` mirrors `target_count` (both go OFF when sitting still). Departure relies on `target_count = 0` duration with long timeouts so that micro-movements (every 5-90s) reset the timer.
 
@@ -32,13 +32,17 @@ A Node-RED flow that uses an RD-03D mmWave radar sensor (via ESP32-S3 + ESPHome 
 - **Enter threshold**: Target enters zone when distance ≤ 2000mm (2m)
 - **Exit threshold**: Target leaves zone when distance ≥ 2100mm (100mm hysteresis band)
 - Prevents rapid on/off toggling when target hovers near the boundary
-- `occupied` = presence OR any target inZone (presence is authoritative)
+- **Target staleness**: Slots with no coordinate update in 10s are expired, but only when the radar reports fewer active targets than currently tracked (excess-slot guard)
+- **ID-swap resilience**: When all tracked slots are stale simultaneously (everyone sitting still), nothing is expired — targets hold their last known geofence state
+- **Stalest-first evaluation**: During expiry, the oldest slot is cleared first to correctly identify ghost targets after radar ID reassignment
+- `occupied` = any target inZone (geofence-only — presence alone does not trigger power-on)
 
 ### CAP-PA-04: Smart Plug Control via Alexa
 
 - **Output 2** emits `"on"` or `"off"` when `occupied` state transitions
-- Driven by the composite `occupied` flag (presence-aware, not just geofence)
-- No downstream debounce needed — presence grace period + force-off provide timing control
+- Driven by the `occupied` flag which requires a target within the 2m geofence (not just presence detection at any distance)
+- Power on only when a person enters the 2m working perimeter
+- No downstream debounce needed — geofence hysteresis + departure timeouts provide timing control
 
 ### CAP-PA-05: Spot Clearing Logic
 
@@ -66,9 +70,9 @@ A Node-RED flow that uses an RD-03D mmWave radar sensor (via ESP32-S3 + ESPHome 
 | Max targets tracked | 3 |
 | Geofence enter radius | 2000mm (2m) |
 | Geofence exit radius | 2100mm (hysteresis) |
+| Target stale timeout | 10 seconds (10,000ms) |
 | Spot hold timer | 2 minutes (120,000ms) |
 | Alexa off timeout | 4 minutes (240,000ms) |
-| Sticky timeout | 30 minutes (1,800,000ms) |
 | Noise floor | ≤ 5mm (ignored) |
 | Radar FOV | 120° (±60°) |
 | Max display range | 3.5m |

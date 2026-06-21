@@ -6,8 +6,9 @@ let radarMap = flow.get("radarMap") || {
     lastPresenceUpdate: 0,
     presenceOffSince: 0,       // timestamp when OFF was first received (grace period)
     targetCountZeroSince: 0,   // timestamp when target_count first hit 0
+    lastTargetCount: 0,        // last reported target_count from radar
     anyActive: false,
-    occupied: false    // primary output: presence OR active geofence target
+    occupied: false    // primary output: geofenced target within 2m
 };
 
 let topic = msg.topic;
@@ -17,7 +18,8 @@ let payloadStr = String(msg.payload).toLowerCase().trim();
 const GEOFENCE_ENTER = 2000;   // Enter zone at ≤2000mm (2m)
 const GEOFENCE_EXIT  = 2100;   // Exit zone at ≥2100mm (hysteresis band = 100mm)
 const MIN_COORDINATE = 5;      // Ignore coordinates < 5mm (noise floor)
-const STICKY_TIMEOUT = 1800000; // 30 min hold before expiring a stale target
+const TARGET_STALE = 10000;    // 10s without coord update → target gone (RD-03D updates ~1s)
+const STICKY_TIMEOUT = 1800000; // 30 min hold before expiring presence-kept target
 const SPOT_HOLD = 120000;      // 2 min of target_count=0 → clear spots from display
 const ALEXA_OFF = 240000;      // 4 min of target_count=0 → Alexa off
 
@@ -55,8 +57,9 @@ if (topic.endsWith("target_detected/state")) {
 // 3a. Target Count — primary departure detection
 if (topic.endsWith("target_count/state")) {
     let count = parseInt(msg.payload);
+    if (!isNaN(count)) radarMap.lastTargetCount = count;
     if (count > 0 && !isNaN(count)) {
-        // Real target — reset departure timer (only target_detected=ON resets presenceOffSince)
+        // Real target — reset departure timer
         radarMap.targetCountZeroSince = 0;
     } else {
         // target_count = 0 — start departure timer
@@ -124,42 +127,47 @@ if (isNumeric && radarMap.presence) {
 }
 
 // 4. Evaluate Target Timers & Geofence with Hysteresis
+// RD-03D is Doppler — stationary targets stop getting coordinate updates AND
+// target_count drops to 0 during stillness. Only use target_count for excess
+// detection when at least one slot is actively receiving fresh coords (proving
+// someone is moving). If all slots are stale, everyone is still — keep them.
 if (radarMap.presence) {
+    let slots = [radarMap.t1, radarMap.t2, radarMap.t3];
+    let trackedSlots = slots.filter(t => t.lastUpdate > 0).length;
+    let freshSlots = slots.filter(t => t.lastUpdate > 0 && (now - t.lastUpdate) <= TARGET_STALE).length;
+
+    // Only trust target_count for expiry when fresh movement proves it's reliable
+    let excessSlots = (freshSlots > 0)
+        ? trackedSlots - Math.max(radarMap.lastTargetCount, freshSlots)
+        : 0; // all stale = everyone still, don't expire
+
     const evaluateTarget = (t) => {
-        if (t.lastUpdate > 0 && (now - t.lastUpdate > STICKY_TIMEOUT)) {
-            // Stale target — but only expire if presence is also stale
-            // If radar still confirms presence, keep the target as "last known position"
-            if (now - radarMap.lastPresenceUpdate > STICKY_TIMEOUT) {
-                t.x = 0; t.y = 0; t.active = false; t.inZone = false;
-                t.distance = 0; t.lastUpdate = 0; t.lastAxis = null;
-                updated = true;
-            } else {
-                // Presence still fresh — person is likely stationary
-                // Keep target alive, just recalculate
-                t.distance = Math.sqrt(t.x * t.x + t.y * t.y);
-                t.active = (t.distance > 0);
-                if (t.inZone) {
-                    t.inZone = (t.distance <= GEOFENCE_EXIT);
-                } else {
-                    t.inZone = (t.distance > 0 && t.distance <= GEOFENCE_ENTER);
-                }
-            }
-        } else if (t.lastUpdate > 0) {
+        if (t.lastUpdate === 0) return; // never updated
+        let staleMs = now - t.lastUpdate;
+        if (staleMs > TARGET_STALE && excessSlots > 0) {
+            // Stale AND confirmed excess (another slot has fresh coords) → expired/swapped
+            t.x = 0; t.y = 0; t.active = false; t.inZone = false;
+            t.distance = 0; t.lastUpdate = 0; t.lastAxis = null;
+            excessSlots--;
+            updated = true;
+        } else {
             t.distance = Math.sqrt(t.x * t.x + t.y * t.y);
             t.active = (t.distance > 0);
             // Hysteresis: use different thresholds for entering vs leaving zone
             if (t.inZone) {
-                // Already in zone — only leave if exceeding exit threshold
                 t.inZone = (t.distance <= GEOFENCE_EXIT);
             } else {
-                // Outside zone — only enter if within enter threshold
                 t.inZone = (t.distance > 0 && t.distance <= GEOFENCE_ENTER);
             }
         }
     };
-    evaluateTarget(radarMap.t1);
-    evaluateTarget(radarMap.t2);
-    evaluateTarget(radarMap.t3);
+    // Evaluate stalest first so the right one gets expired
+    let targets = [
+        { key: 't1', t: radarMap.t1 },
+        { key: 't2', t: radarMap.t2 },
+        { key: 't3', t: radarMap.t3 }
+    ].sort((a, b) => a.t.lastUpdate - b.t.lastUpdate);
+    targets.forEach(({ t }) => evaluateTarget(t));
 }
 
 // 5. Check Global Trigger & Route Outputs
