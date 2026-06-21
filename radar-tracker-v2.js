@@ -163,11 +163,11 @@ if (radarMap.presence) {
 }
 
 // 5. Check Global Trigger & Route Outputs
-// occupied = presence OR any geofenced target (presence is authoritative)
+// occupied = geofenced target only (must be within 2m to power on)
 let lastAnyActive = radarMap.anyActive;
 let lastOccupied = radarMap.occupied;
 radarMap.anyActive = (radarMap.t1.inZone || radarMap.t2.inZone || radarMap.t3.inZone);
-radarMap.occupied = radarMap.presence || radarMap.anyActive;
+radarMap.occupied = radarMap.anyActive;
 flow.set("radarMap", radarMap);
 
 let msgUI = null;
